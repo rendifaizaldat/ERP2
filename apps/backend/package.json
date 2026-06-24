@@ -1,0 +1,44 @@
+{
+  "name": "@asstro/backend",
+  "version": "1.0.0",
+  "description": "Asstro ERP Backend & Database",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:reset": "tsx src/db/reset-db.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "nats:reset": "tsx src/services/reset-nats.ts",
+    "fr": "pnpm run db:reset && pnpm run db:push && pnpm run db:seed && pnpm run nats:reset"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.20.0",
+  "dependencies": {
+    "@asstro/protocol": "workspace:*",
+    "cors": "^2.8.6",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "nats": "^2.29.3",
+    "pg": "^8.21.0",
+    "socket.io": "^4.8.3",
+    "ulid": "^3.0.2",
+    "ulidx": "^2.4.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.7.0",
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3"
+  }
+}

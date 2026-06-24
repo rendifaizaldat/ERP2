@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: asstro_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: asstro_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - asstro_pg_data:/var/lib/postgresql/data
+
+  # --- TAMBAHAN BARU: NATS JETSTREAM ---
+  nats:
+    image: nats:alpine
+    container_name: asstro_nats
+    restart: always
+    ports:
+      - "4222:4222" # Port koneksi utama untuk microservices
+      - "8222:8222" # Dashboard Management HTTP
+    command: ["-js"] # Flag Wajib: Mengaktifkan JetStream (Persisted Message Broker)
+    volumes:
+      - asstro_nats_data:/nats/data # Persistensi antrean agar tidak hilang saat restart
+
+volumes:
+  asstro_pg_data:
+    name: asstro_pg_data
+  asstro_nats_data:
+    name: asstro_nats_data
