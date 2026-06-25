@@ -362,10 +362,16 @@ const PettyCashResolvedPayload = z.object({
   timestamp: z.number(),
 });
 
+const SettingsUpdatedPayload = z.record(z.string(), z.any());
+
 // ============================================================================
 // APP EVENT SCHEMA (Master Union)
 // ============================================================================
 export const AppEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("SETTINGS_UPDATED"),
+    payload: SettingsUpdatedPayload,
+  }),
   z.object({
     type: z.literal("SYSTEM_INITIALIZED"),
     payload: SystemInitializedPayload,

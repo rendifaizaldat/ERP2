@@ -22,19 +22,27 @@ export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
             <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
               Tipe Printer
             </label>
-            <select className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white">
-              <option>Thermal POS Printer</option>
-              <option>Inkjet/Laser Document</option>
+            <select
+              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white"
+              value={settings?.printer?.mainType || "Thermal"}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printer: { ...prev.printer, mainType: e.target.value } }))}
+            >
+              <option value="Thermal">Thermal POS Printer</option>
+              <option value="Inkjet">Inkjet/Laser Document</option>
             </select>
           </div>
           <div>
             <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
               Jalur Komunikasi
             </label>
-            <select className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white">
-              <option>Bluetooth (SPP/BLE)</option>
-              <option>TCP/IP LAN (Network)</option>
-              <option>USB Serial</option>
+            <select
+              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white"
+              value={settings?.printer?.connection || "Bluetooth"}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printer: { ...prev.printer, connection: e.target.value } }))}
+            >
+              <option value="Bluetooth">Bluetooth (SPP/BLE)</option>
+              <option value="LAN">TCP/IP LAN (Network)</option>
+              <option value="USB">USB Serial</option>
             </select>
           </div>
         </div>
@@ -45,7 +53,8 @@ export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
           <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white px-3 py-2 border rounded-lg">
             <input
               type="checkbox"
-              defaultChecked
+              checked={settings?.printer?.autoPrint ?? true}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printer: { ...prev.printer, autoPrint: e.target.checked } }))}
               className="w-4 h-4 accent-blue-600"
             />{" "}
             Auto-Print saat Checkout
@@ -54,7 +63,8 @@ export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
             Total Copy:{" "}
             <input
               type="number"
-              defaultValue={1}
+              value={settings?.printer?.copy || 1}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printer: { ...prev.printer, copy: parseInt(e.target.value) || 1 } }))}
               min={1}
               max={3}
               className="w-12 border rounded bg-slate-50 p-1 text-center"

@@ -53,23 +53,7 @@ export const usePosSync = () => {
     pcMap: new Map(),
     activeOrdersMap: new Map(),
     auditArr: [] as any[],
-    initialShiftCash: 0,
-    cashSalesRevenue: 0,
-    totalPettyCashDeduction: 0,
     activeOperatorIdFromLedger: null as string | null,
-    latestSettings: {
-      struk: {
-        header: "",
-        footer: "",
-        paperSize: "58mm",
-        showCashier: true,
-        showQris: true,
-      },
-      printer: { mainType: "Thermal", autoPrint: true, copy: 1 },
-      pajak: { ppn: 11, serviceCharge: 5, taxIncluded: true },
-      pembayaran: { cash: true, edc: true, qris: true },
-      io: { useSmartInput: true },
-    },
   });
 
   const getCombinedStaff = () => {
@@ -90,23 +74,7 @@ export const usePosSync = () => {
   // 1. ENGINE PEMROSES EVENT (Reducer Murni)
   // ------------------------------------------------------------
   const processEvent = (ev: any, mem: typeof memRef.current) => {
-    if (ev.type === "SETTINGS_UPDATED") {
-      mem.latestSettings = { ...mem.latestSettings, ...ev.payload };
-    }
-    if (ev.type === "FINANCIAL_CONFIG_SYNCED") {
-      mem.latestSettings = {
-        ...mem.latestSettings,
-        pajak: {
-          ...mem.latestSettings.pajak,
-          ppn: Number(ev.payload.taxRate) || 0,
-          serviceCharge: Number(ev.payload.serviceRate) || 0,
-        },
-      };
-    }
     if (ev.type === "SHIFT_OPENED") {
-      mem.initialShiftCash = ev.payload.initial_cash;
-      mem.cashSalesRevenue = 0;
-      mem.totalPettyCashDeduction = 0;
       mem.activeOperatorIdFromLedger = ev.payload.operator_id;
     }
     if (ev.type === "SHIFT_CLOSED" || ev.type === "END_OF_DAY_PROCESSED") {
@@ -117,9 +85,6 @@ export const usePosSync = () => {
       mem.pcMap.clear();
       mem.activeOrdersMap.clear();
       mem.auditArr.length = 0;
-      mem.initialShiftCash = 0;
-      mem.cashSalesRevenue = 0;
-      mem.totalPettyCashDeduction = 0;
       mem.activeOperatorIdFromLedger = null;
     }
 
@@ -177,8 +142,6 @@ export const usePosSync = () => {
       if (tx) {
         tx.payment_method = p.method;
         tx.status = "PAID";
-        if (p.method === "CASH")
-          mem.cashSalesRevenue += p.amountPaid - p.changeAmount;
 
         if (tx.orderId) {
           const order = mem.activeOrdersMap.get(tx.orderId);
@@ -216,34 +179,6 @@ export const usePosSync = () => {
       });
     }
 
-    if (ev.type === "PETTY_CASH_ISSUED")
-      mem.pcMap.set(ev.payload.petty_cash_id, ev.payload);
-
-    if (ev.type === "PETTY_CASH_RESOLVED") {
-      const pc = mem.pcMap.get(ev.payload.petty_cash_id);
-      if (pc) {
-        pc.status = "COMPLETED";
-        pc.amount_returned = ev.payload.amount_returned;
-        pc.has_receipt = ev.payload.has_receipt;
-        pc.cashier_resolved_name = ev.payload.cashier_name;
-      }
-    }
-
-    if (ev.type === "ORDER_VOIDED" || ev.type === "ORDER_REFUNDED") {
-      mem.auditArr.push({
-        timestamp: ev.payload.timestamp || Date.now(),
-        type: ev.type === "ORDER_VOIDED" ? "VOID" : "REFUND",
-        tableOrInvoice: ev.payload.tableLabel || ev.payload.invoice_id,
-        itemsInfo:
-          ev.type === "ORDER_VOIDED"
-            ? `${ev.payload.qtyToVoid}x ${ev.payload.sku}`
-            : `${ev.payload.items?.length || 0} ITEMS`,
-        totalAmount: 0,
-        cashierName: currentOperator?.name || "KASIR",
-        managerName: "MANAGER",
-        note: ev.payload.voidNote || ev.payload.refundNote || "Tindakan Audit",
-      });
-    }
   };
 
   // ------------------------------------------------------------
@@ -300,25 +235,6 @@ export const usePosSync = () => {
       );
     });
 
-    computedState.sales = {
-      total_revenue: 0,
-      total_transactions: 0,
-      last_invoice: null,
-      current_cash_in_drawer:
-        mem.initialShiftCash +
-        mem.cashSalesRevenue -
-        mem.totalPettyCashDeduction,
-    };
-    computedState.currentShiftInitialCash = mem.initialShiftCash;
-    computedState.transactions = Array.from(mem.txMap.values()).sort(
-      (a, b) => b.timestamp - a.timestamp,
-    );
-    computedState.pettyCashTransactions = Array.from(mem.pcMap.values());
-    computedState.auditLogs = mem.auditArr.sort(
-      (a, b) => b.timestamp - a.timestamp,
-    );
-    computedState.settings = mem.latestSettings;
-
     if (mem.activeOperatorIdFromLedger) {
       const foundStaff = combinedStaff.find(
         (s) => s.id === mem.activeOperatorIdFromLedger,
@@ -366,9 +282,6 @@ export const usePosSync = () => {
       memRef.current.pcMap.clear();
       memRef.current.activeOrdersMap.clear();
       memRef.current.auditArr = [];
-      memRef.current.initialShiftCash = 0;
-      memRef.current.cashSalesRevenue = 0;
-      memRef.current.totalPettyCashDeduction = 0;
       memRef.current.activeOperatorIdFromLedger = null;
 
       events.forEach((ev) => processEvent(ev, memRef.current));

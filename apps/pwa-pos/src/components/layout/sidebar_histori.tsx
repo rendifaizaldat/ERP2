@@ -35,7 +35,7 @@ export const SidebarHistori = ({
   const [showRefundModal, setShowRefundModal] = useState(false);
 
   const [searchMode, setSearchMode] = useState<"LOCAL" | "CLOUD">("LOCAL");
-  const [isSearching, setIsSearching] = useState(false);
+  const [cloudSearchStatus, setCloudSearchStatus] = useState<"IDLE" | "SEARCHING" | "SUCCESS" | "EMPTY" | "ERROR">("IDLE");
   const [cloudResults, setCloudResults] = useState<any[]>([]);
 
   const [searchType, setSearchType] = useState<
@@ -54,17 +54,43 @@ export const SidebarHistori = ({
       return;
     }
 
-    setIsSearching(true);
-    try {
-      if (searchMode === "CLOUD") {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setCloudResults([]);
-        if (isManualSubmit) {
-          showToast(`Pencarian cloud invoice ${searchValue} selesai.`, "INFO");
+    if (searchMode === "CLOUD") {
+      setCloudSearchStatus("SEARCHING");
+      try {
+        await new Promise((resolve, reject) => {
+          setTimeout(() => {
+            if (searchValue === "ERROR") reject(new Error("Simulasi Error Koneksi Cloud"));
+            resolve(true);
+          }, 1500);
+        });
+
+        const dummyResults = searchValue === "EMPTY" ? [] : [
+          {
+            invoice_id: searchValue || "INV-CLOUD-001",
+            timestamp: Date.now(),
+            grand_total: 120000,
+            status: "PAID",
+            payment_method: "QRIS",
+            table_label: "MEJA-10",
+            items: [
+              { name: "Dummy Cloud Item", qty: 2, price: 60000 }
+            ]
+          }
+        ];
+
+        setCloudResults(dummyResults);
+
+        if (dummyResults.length > 0) {
+          setCloudSearchStatus("SUCCESS");
+          if (isManualSubmit) showToast(`Ditemukan ${dummyResults.length} invoice dari Cloud.`, "SUCCESS");
+        } else {
+          setCloudSearchStatus("EMPTY");
+          if (isManualSubmit) showToast(`Tidak ditemukan invoice di Cloud.`, "WARNING");
         }
+      } catch (e: any) {
+        setCloudSearchStatus("ERROR");
+        if (isManualSubmit) showToast(`Gagal menghubungi server Cloud: ${e.message}`, "ERROR");
       }
-    } finally {
-      setIsSearching(false);
     }
   };
 
@@ -269,7 +295,7 @@ export const SidebarHistori = ({
               </div>
 
               <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin">
-                {isSearching ? (
+                {searchMode === "CLOUD" && cloudSearchStatus === "SEARCHING" ? (
                   <div className="flex flex-col items-center justify-center h-40 text-slate-400">
                     <CloudLightning
                       size={24}
@@ -277,6 +303,13 @@ export const SidebarHistori = ({
                     />
                     <span className="text-xs font-bold">
                       Mencari di Server Enterprise...
+                    </span>
+                  </div>
+                ) : searchMode === "CLOUD" && cloudSearchStatus === "ERROR" ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-red-500">
+                    <ShieldAlert size={24} className="mb-2" />
+                    <span className="text-xs font-bold">
+                      Gagal menghubungi server.
                     </span>
                   </div>
                 ) : transactions.length === 0 ? (

@@ -112,7 +112,7 @@ export const SidebarKas = ({
   };
 
   const handlePrintPDF = () => {
-    const listKas = state?.pettyCashTransactions || [];
+    const listKas = state?.cash?.pettyCashTransactions || [];
     if (listKas.length === 0) {
       showToast("Tidak ada data riwayat kas untuk dicetak.", "ERROR");
       return;
@@ -164,7 +164,7 @@ export const SidebarKas = ({
 
   if (!isOpen) return null;
 
-  const listKas = state?.pettyCashTransactions || [];
+  const listKas = state?.cash?.pettyCashTransactions || [];
 
   return (
     <div className="fixed inset-0 z-200 bg-slate-950/80 backdrop-blur-sm flex justify-end">
