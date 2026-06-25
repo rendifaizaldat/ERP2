@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   ShieldAlert,
   ArrowRight,
@@ -35,40 +35,12 @@ export const SidebarReconModal = ({
   const [step, setStep] = useState<"INPUT" | "CONFIRM">("INPUT");
   const [reason, setReason] = useState("");
 
-  // Kalkulasi Cerdas Sistem (System Cash, Tanggungan Meja, Total Batal)
-  const calculations = useMemo(() => {
-    const txs = state?.transactions || [];
-    const petty = state?.pettyCashTransactions || [];
-    const audits = state?.auditLogs || [];
-    const tables = state?.tables || [];
-
-    let cashSales = 0;
-    txs.forEach((tx: any) => {
-      if (tx.payment_method === "CASH") cashSales += tx.grand_total;
-    });
-
-    let pettyCashOut = 0;
-    petty.forEach((p: any) => {
-      pettyCashOut += p.amount_requested;
-      if (p.status === "COMPLETED") pettyCashOut -= p.amount_returned || 0;
-    });
-
-    let cashRefunds = 0;
-    audits.forEach((a: any) => {
-      if (a.type === "REFUND") cashRefunds += a.totalAmount;
-    });
-
-    const initial = state?.currentShiftInitialCash || 0;
-    const systemCash = initial + cashSales - pettyCashOut - cashRefunds;
-
-    const activeTables = tables.filter(
-      (t: any) =>
-        (t.savedItems && t.savedItems.length > 0) || t.currentBill > 0,
-    ).length;
-    const voidRefundCount = audits.length;
-
-    return { systemCash, activeTables, voidRefundCount };
-  }, [state]);
+  // Membaca Kalkulasi langsung dari Projection
+  const calculations = state?.recon || {
+    systemCash: 0,
+    activeTables: 0,
+    voidRefundCount: 0,
+  };
 
   const actCashNum = Number(actualCash) || 0;
   const difference = actCashNum - calculations.systemCash;

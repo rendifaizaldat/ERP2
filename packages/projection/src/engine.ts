@@ -1,5 +1,5 @@
 import { LedgerEvent } from "../../ledger/src/engine";
-import { InventoryState, SalesState, OrderItem } from "./types";
+import { InventoryState, SalesState, OrderItem, SettingsState, ReconProjection, ReportProjection, CashProjection } from "./types";
 
 export interface StaffMember {
   id: string;
@@ -59,6 +59,13 @@ export class ProjectionEngine {
     last_invoice: null,
   };
   private activeOperator: StaffMember | null = null;
+  private settings: SettingsState = {};
+
+  private shiftInitialCash: number = 0;
+  private pettyCashTransactions: any[] = [];
+  private reportData: ReportProjection | null = null;
+  private reconData: ReconProjection | null = null;
+  private cashData: CashProjection | null = null;
 
   private calculateOrderBill(items: OrderItem[] | any[]): number {
     return (items as any[]).reduce((total: number, item: any) => {
@@ -566,6 +573,10 @@ export class ProjectionEngine {
             this.activeOperator = found;
           }
         }
+        this.shiftInitialCash = payload.startingCash || payload.initial_cash || 0;
+        this.transactions = [];
+        this.auditLogs = [];
+        this.pettyCashTransactions = [];
         break;
       }
 
@@ -580,9 +591,41 @@ export class ProjectionEngine {
         break;
       }
 
+      case "SETTINGS_UPDATED": {
+        this.settings = { ...this.settings, ...(event.payload as any) };
+        break;
+      }
+
+      case "PAYMENT_RECEIVED":
+      case "ORDER_CREATED":
+      case "INVOICE_CREATED":
+      case "SALE_CREATED": {
+        this.transactions.push({ ...event.payload as any, status: event.type === 'PAYMENT_RECEIVED' || event.type === 'SALE_CREATED' ? 'PAID' : 'PENDING' });
+        break;
+      }
+
+      case "PETTY_CASH_ISSUED": {
+        this.pettyCashTransactions.push(event.payload as any);
+        break;
+      }
+
+      case "PETTY_CASH_RESOLVED": {
+        const payload = event.payload as any;
+        const index = this.pettyCashTransactions.findIndex((p: any) => p.petty_cash_id === payload.petty_cash_id);
+        if (index >= 0) {
+          this.pettyCashTransactions[index] = { ...this.pettyCashTransactions[index], status: "COMPLETED", ...payload };
+        }
+        break;
+      }
+
       default:
         break;
     }
+
+    // Invalidate cached reports to force recalculation on next read
+    this.reportData = null;
+    this.reconData = null;
+    this.cashData = null;
   }
 
   private updateStock(sku: string, delta: number, hlc: string) {
@@ -654,10 +697,153 @@ export class ProjectionEngine {
         last_invoice: null,
       },
       activeOperator: null,
+      settings: {},
+      report: {
+        totalTrx: 0,
+        initialCash: 0,
+        cashSales: 0,
+        systemCash: 0,
+        totalGross: 0,
+        totalNet: 0,
+        totalTax: 0,
+        totalService: 0,
+        catSales: {},
+        paymentSales: {},
+        pettyCashOut: 0,
+        totalVoid: 0,
+        totalRefund: 0,
+        staffList: [],
+        pluData: [],
+      },
+      recon: {
+        systemCash: 0,
+        activeTables: 0,
+        voidRefundCount: 0,
+      },
+      cash: {
+        currentCash: 0,
+        openingCash: 0,
+        pettyCash: 0,
+        cashIn: 0,
+        cashOut: 0,
+        closingCash: 0,
+      },
     };
   }
 
   public getState() {
+    // 1. COMPUTED PROJECTIONS (REPORT, RECON, CASH)
+    if (!this.reportData || !this.reconData || !this.cashData) {
+      const completedTransactions = this.transactions.filter((tx: any) => tx.status === "PAID" || tx.status === "COMPLETED" || !tx.status || tx.status !== "PENDING");
+
+      let cashSales = 0;
+      let totalGross = 0;
+      let totalNet = 0;
+      let totalTax = 0;
+      let totalService = 0;
+      const catSales: Record<string, { qty: number; total: number }> = {};
+      const paymentSales: Record<string, number> = {};
+      const staffSet = new Set<string>();
+
+      completedTransactions.forEach((tx: any) => {
+      totalNet += tx.subtotal || 0;
+      totalTax += tx.tax_amount || tx.taxAmount || 0;
+      totalService += tx.service_amount || tx.serviceAmount || 0;
+      totalGross += tx.grand_total || tx.grandTotal || tx.amountPaid || 0;
+
+      if (tx.cashierName) staffSet.add(tx.cashierName);
+      if (tx.waiterName) staffSet.add(tx.waiterName);
+
+      const method = (tx.payment_method || tx.method || "CASH").toUpperCase();
+      paymentSales[method] = (paymentSales[method] || 0) + (tx.grand_total || tx.amountPaid || 0);
+
+      if (method === "CASH" || method === "TUNAI") {
+        cashSales += tx.grand_total || tx.amountPaid || 0;
+      }
+
+      (tx.items || []).forEach((item: any) => {
+        const activeQty = item.qty - (item.refundedQty || 0);
+        if (activeQty > 0) {
+          const catName = item.category_name || "UNCATEGORIZED";
+          if (!catSales[catName]) catSales[catName] = { qty: 0, total: 0 };
+          catSales[catName].qty += activeQty;
+          catSales[catName].total += (item.price || item.basePriceSnapshot || 0) * activeQty;
+        }
+      });
+    });
+
+    let pettyCashOut = 0;
+    this.pettyCashTransactions.forEach((pc: any) => {
+      pettyCashOut += pc.amount_requested;
+      if (pc.status === "COMPLETED") pettyCashOut -= pc.amount_returned || 0;
+      if (pc.cashier_issued_name) staffSet.add(pc.cashier_issued_name);
+    });
+
+    let totalVoid = 0;
+    let totalRefund = 0;
+    this.auditLogs.forEach((a: any) => {
+      if (a.eventType === "ORDER_VOIDED") totalVoid += a.totalAmount || 0;
+      if (a.eventType === "PAYMENT_REFUNDED" || a.eventType === "ORDER_REFUNDED") totalRefund += a.totalAmount || 0;
+    });
+
+    const systemCash = this.shiftInitialCash + cashSales - pettyCashOut - totalRefund;
+
+    const pluMap: Record<string, { qty: number; total: number }> = {};
+    completedTransactions.forEach((tx: any) => {
+      (tx.items || []).forEach((item: any) => {
+        const activeQty = item.qty - (item.refundedQty || 0);
+        if (activeQty > 0) {
+          const itemName = item.name || item.nameSnapshot || "UNKNOWN";
+          if (!pluMap[itemName]) pluMap[itemName] = { qty: 0, total: 0 };
+          pluMap[itemName].qty += activeQty;
+          pluMap[itemName].total += (item.price || item.basePriceSnapshot || 0) * activeQty;
+        }
+      });
+    });
+
+    const pluData = Object.entries(pluMap).sort((a, b) => b[1].qty - a[1].qty);
+
+    const activeTables = this.tables.filter((t: any) => (t.savedItems && t.savedItems.length > 0) || t.currentBill > 0).length;
+
+    const report = {
+      totalTrx: completedTransactions.length,
+      initialCash: this.shiftInitialCash,
+      cashSales,
+      systemCash,
+      totalGross,
+      totalNet,
+      totalTax,
+      totalService,
+      catSales,
+      paymentSales,
+      pettyCashOut,
+      totalVoid,
+      totalRefund,
+      staffList: Array.from(staffSet),
+      pluData,
+    };
+
+    const recon = {
+      systemCash,
+      activeTables,
+      voidRefundCount: this.auditLogs.filter(log => log.eventType === "ORDER_VOIDED" || log.eventType === "ORDER_CANCELLED" || log.eventType === "PAYMENT_REFUNDED" || log.eventType === "ORDER_REFUNDED").length,
+    };
+
+      const cash = {
+        currentCash: systemCash,
+        openingCash: this.shiftInitialCash,
+        pettyCash: pettyCashOut,
+        cashIn: cashSales,
+        cashOut: pettyCashOut + totalRefund,
+        closingCash: systemCash,
+        pettyCashTransactions: [...this.pettyCashTransactions],
+      };
+
+      this.reportData = report;
+      this.reconData = recon;
+      this.cashData = cash;
+    }
+
     return {
       isInitialized: this.isInitialized,
       companyName: this.companyName,
@@ -673,6 +859,10 @@ export class ProjectionEngine {
       auditLogs: [...this.auditLogs],
       sales: { ...this.sales },
       activeOperator: this.activeOperator ? { ...this.activeOperator } : null,
+      settings: { ...this.settings },
+      report: this.reportData,
+      recon: this.reconData,
+      cash: this.cashData,
     };
   }
 }

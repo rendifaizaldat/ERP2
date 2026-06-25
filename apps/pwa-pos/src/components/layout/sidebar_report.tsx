@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { useReportCalculations } from "../../core/hooks/useReportCalculations";
 import { usePos } from "../../core/PosProvider";
 import { EodClosingModal } from "../modals/EodClosingModal";
 
@@ -25,18 +24,31 @@ export const SidebarReport = ({
   const [activeTab, setActiveTab] = useState<"MOD" | "PLU" | "VOID">("MOD");
   const [showEodModal, setShowEodModal] = useState(false);
 
-  // Mengambil hasil kalkulasi dari custom hook
-  const { modData, pluData, audits } = useReportCalculations();
+  // Mengambil hasil kalkulasi langsung dari Projection
+  const reportData = state?.report || {
+    totalTrx: 0,
+    initialCash: 0,
+    cashSales: 0,
+    systemCash: 0,
+    totalGross: 0,
+    totalNet: 0,
+    totalTax: 0,
+    totalService: 0,
+    catSales: {},
+    paymentSales: {},
+    pettyCashOut: 0,
+    totalVoid: 0,
+    totalRefund: 0,
+    staffList: [],
+    pluData: [],
+  };
 
-  // Deteksi Meja Gantung (Open Bill)
-  const activeTablesCount =
-    state?.tables?.filter(
-      (t: any) =>
-        (t.savedItems && t.savedItems.length > 0) || t.currentBill > 0,
-    ).length || 0;
+  const activeTablesCount = state?.recon?.activeTables || 0;
 
-  // Rumus Mutlak sudah ditangani di dalam hook useReportCalculations
-  const systemCash = modData.systemCash;
+  const systemCash = reportData.systemCash;
+  const modData = reportData;
+  const pluData = reportData.pluData;
+  const audits = state?.auditLogs || [];
 
   const handlePrintPDF = () => {
     if (activeTab === "MOD") return;

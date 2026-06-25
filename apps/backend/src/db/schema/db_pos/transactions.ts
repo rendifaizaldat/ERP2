@@ -249,6 +249,28 @@ export const pettyCashKasir = pgTable("petty_cash_kasir", {
 });
 
 // ============================================================================
+// POS LEDGERS (Arus Kas)
+// ============================================================================
+export const posLedgers = pgTable("pos_ledgers", {
+  id: varchar("id", { length: 50 }).primaryKey(),
+  branchId: varchar("branch_id", { length: 50 })
+    .references(() => branches.id)
+    .notNull(),
+  operatorId: varchar("operator_id", { length: 50 })
+    .references(() => users.id)
+    .notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // 'CREDIT' | 'DEBIT'
+  amount: integer("amount").notNull(),
+  balanceAfter: integer("balance_after").notNull(),
+  referenceId: varchar("reference_id", { length: 50 }), // Bisa invoice_id, petty_cash_id, refund_id
+  sourceEvent: varchar("source_event", { length: 50 }).notNull(), // SALE_CREATED, PETTY_CASH_ISSUED, PAYMENT_REFUNDED
+  description: varchar("description", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ============================================================================
 // LAYER 5: AUDIT LOGS (Jejak Rekam Keamanan & Fraud Detection)
 // ============================================================================
 export const auditLogs = pgTable("audit_logs", {
